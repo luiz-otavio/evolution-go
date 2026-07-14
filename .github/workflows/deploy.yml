@@ -1,0 +1,291 @@
+name: Deploy to GitHub Releases
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - trunk
+      - releases
+
+
+env:
+  GO_VERSION: "1.26.0"
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      affected_modules: ${{ steps.add_all.outputs.modules || steps.affected.outputs.modules }}
+      has_changes: ${{ steps.add_all.outputs.has_changes || steps.affected.outputs.has_changes }}
+      modules: ${{ steps.add_all.outputs.modules || steps.affected.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Need full history for diff
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Determine base SHA
+        id: base
+        run: |
+          echo "sha=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+
+      - name: Find affected modules
+        id: affected
+        run: |
+          chmod +x ./scripts/find-affected-services.sh
+
+          # Find all module directories (directories containing go.mod, excluding root)
+          all_modules=$(find . -name "go.mod" -not -path "./go.mod" -exec dirname {} \; | sed 's|^\./||' | sort -u)
+          
+          echo "All modules found:"
+          echo "$all_modules" | sed 's/^/  /'
+          echo ""
+          
+          # Run script - stderr has logs, stdout has affected packages
+          # We capture stdout only, stderr goes to console for logging
+          affected_packages=$(./scripts/find-affected-services.sh "${{ steps.base.outputs.sha }}" || true)
+          
+          echo "Affected packages from script:"
+          echo "$affected_packages" | sed 's/^/  /'
+          echo ""
+
+          # Determine which modules have changes by checking if any affected package belongs to the module
+          # We need to check the module path prefix in the package import path
+          affected_modules=""
+          for mod in $all_modules; do
+            # Get the module import path directly from go.mod file (not go list -m which returns all workspace modules)
+            mod_import_path=$(grep '^module ' "$mod/go.mod" | awk '{print $2}')
+            if [[ -n "$mod_import_path" ]]; then
+              # Check if any affected package starts with this module's import path
+              if echo "$affected_packages" | grep -q "^${mod_import_path}"; then
+                affected_modules="$affected_modules$mod"$'\n'
+                echo "✓ Module '$mod' ($mod_import_path) is affected"
+              else
+                echo "✗ Module '$mod' ($mod_import_path) is NOT affected"
+              fi
+            fi
+          done
+          
+          affected_modules=$(echo "$affected_modules" | grep -v '^$' | sort -u)
+
+          echo ""
+          if [[ -n "$affected_modules" ]]; then
+            # Convert to JSON array for matrix
+            json=$(echo "$affected_modules" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "modules=$json" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            
+            echo "Affected modules:"
+            echo "$affected_modules" | sed 's/^/  /'
+          else
+            echo "modules=[]" >> "$GITHUB_OUTPUT"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No modules affected by changes"
+          fi
+      - name: Add all modules to output for workflow_dispatch
+        id: add_all
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          all_modules=$(find . -name "go.mod" -not -path "./go.mod" -exec dirname {} \; | sed 's|^\./||' | sort -u)
+          json=$(echo "$all_modules" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "$all_modules" | sed 's/^/  /' | tee -
+          echo "modules=$json" >> "$GITHUB_OUTPUT"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          echo "All modules will be processed due to manual trigger"
+
+  pre-release:
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: github.ref == 'refs/heads/trunk' && needs.detect-changes.outputs.has_changes == 'true'
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.detect-changes.outputs.modules) }}
+      fail-fast: false
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          cache: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Determine version for ${{ matrix.module }}
+        id: version
+        run: |
+          MODULE="${{ matrix.module }}"
+
+          latest_stable=$(git tag --list "${MODULE}/v*" --sort=-v:refname | grep -v "rc" | head -n 1 || echo "")
+          latest_rc=$(git tag --list "${MODULE}/v*-rc*" --sort=-v:refname | head -n 1 || echo "")
+
+          stable_ver="${latest_stable#${MODULE}/v}"
+          rc_ver_full="${latest_rc#${MODULE}/v}"
+          rc_base="${rc_ver_full%-rc*}"
+
+          function version_gt() { test "$(printf '%s\n%s' "$@" | sort -V | head -n 1)" != "$1"; }
+
+          # 3. Lógica de Decisão Robusta
+          if [[ -z "$latest_stable" && -z "$latest_rc" ]]; then
+              new_version="0.1.0-rc.1"
+          elif [[ -n "$latest_rc" ]] && ( [[ -z "$latest_stable" ]] || version_gt "$rc_base" "$stable_ver" || [[ "$rc_base" == "$stable_ver" && ! "$latest_stable" ]] ); then
+              if [[ $rc_ver_full =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-rc\.([0-9]+)$ ]]; then
+                  major="${BASH_REMATCH[1]}"
+                  minor="${BASH_REMATCH[2]}"
+                  patch="${BASH_REMATCH[3]}"
+                  rc_num="${BASH_REMATCH[4]}"
+                  new_version="${major}.${minor}.${patch}-rc.$((rc_num + 1))"
+              fi
+
+          else
+              if [[ $stable_ver =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                  major="${BASH_REMATCH[1]}"
+                  minor="${BASH_REMATCH[2]}"
+                  patch="${BASH_REMATCH[3]}"
+                  new_version="${major}.${minor}.$((patch + 1))-rc.1"
+              fi
+          fi
+
+          # 4. Outputs
+          new_tag="${MODULE}/v${new_version}"
+          echo "version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push release candidate tag for ${{ matrix.module }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release candidate for ${{ matrix.module }} v${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Generate release candidate changelog for ${{ matrix.module }}
+        id: changelog
+        run: |
+          MODULE="${{ matrix.module }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          
+          # Get the previous tag for this module
+          prev_tag=$(git tag --list "${MODULE}/v*" --sort=-v:refname | sed -n '2p' || echo "")
+          
+          echo "## Changes in $MODULE" > changelog.md
+          echo "" >> changelog.md
+          
+          if [[ -z "$prev_tag" ]]; then
+            # First release - show all commits affecting this module
+            echo "Initial release of \`$MODULE\`" >> changelog.md
+            echo "" >> changelog.md
+            echo "### Commits" >> changelog.md
+            git log --pretty=format:"- %s (%h)" -- "$MODULE/" >> changelog.md || echo "- Initial commit" >> changelog.md
+          else
+            # Show commits since previous tag
+            echo "### Commits since $prev_tag" >> changelog.md
+            git log --pretty=format:"- %s (%h)" "${prev_tag}..HEAD" -- "$MODULE/" >> changelog.md || echo "- No commits found" >> changelog.md
+          fi
+
+      - name: Make Release candidate for trunk branch
+        uses: ncipollo/release-action@v1.16.0
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+          bodyFile: changelog.md
+          name: "${{ matrix.module }} v${{ steps.version.outputs.version }}"
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          makeLatest: false
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: github.ref == 'refs/heads/releases' && needs.detect-changes.outputs.has_changes == 'true'
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.detect-changes.outputs.modules) }}
+      fail-fast: false
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          cache: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Determine version for ${{ matrix.module }}
+        id: version
+        run: |
+          MODULE="${{ matrix.module }}"
+          
+          # Get the latest non-RC tag for this module (exclude RC versions)
+          latest_tag=$(git tag --list "${MODULE}/v*" --sort=-v:refname | grep -v '\-rc' | head -n 1 || echo "")
+          
+          if [[ -z "$latest_tag" ]]; then
+            # No tag exists, start with v0.1.0
+            new_version="0.1.0"
+            echo "No previous tag found, starting with v${new_version}"
+          else
+            # Extract version from tag (remove module prefix and 'v')
+            current_version="${latest_tag#${MODULE}/v}"
+            echo "Current version: v${current_version}"
+            
+            # Parse version components
+            IFS='.' read -r major minor patch <<< "$current_version"
+            
+            # Bump patch version
+            patch=$((patch + 1))
+            new_version="${major}.${minor}.${patch}"
+            echo "Bumping to: v${new_version}"
+          fi
+          
+          new_tag="${MODULE}/v${new_version}"
+          echo "version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push release tag for ${{ matrix.module }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ matrix.module }} v${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Generate release changelog for ${{ matrix.module }}
+        id: changelog
+        run: |
+          MODULE="${{ matrix.module }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          
+          # Get the previous tag for this module
+          prev_tag=$(git tag --list "${MODULE}/v*" --sort=-v:refname | sed -n '2p' || echo "")
+          
+          echo "## Changes in $MODULE" > changelog.md
+          echo "" >> changelog.md
+          
+          if [[ -z "$prev_tag" ]]; then
+            # First release - show all commits affecting this module
+            echo "Initial release of \`$MODULE\`" >> changelog.md
+            echo "" >> changelog.md
+            echo "### Commits" >> changelog.md
+            git log --pretty=format:"- %s (%h)" -- "$MODULE/" >> changelog.md || echo "- Initial commit" >> changelog.md
+          else
+            # Show commits since previous tag
+            echo "### Commits since $prev_tag" >> changelog.md
+            git log --pretty=format:"- %s (%h)" "${prev_tag}..HEAD" -- "$MODULE/" >> changelog.md || echo "- No commits found" >> changelog.md
+          fi
+
+      - name: Make Release for release branch
+        uses: ncipollo/release-action@v1.16.0
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+          bodyFile: changelog.md
+          name: "${{ matrix.module }} v${{ steps.version.outputs.version }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          makeLatest: true
