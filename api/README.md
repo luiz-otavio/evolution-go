@@ -1,10 +1,10 @@
 # evolution-go
 
-Cliente Go (Wrapper) para Evolution com foco em segurança de tipos, validação local de payloads e testes de contrato.
+Go client wrapper for Evolution with a focus on type safety, local payload validation, and contract testing.
 
-## O que é este módulo
+## What this module is
 
-Este módulo encapsula as rotas REST da Evolution API em serviços Go:
+This module encapsulates Evolution API REST routes into Go services:
 
 - InstanceService
 - MessageService
@@ -18,23 +18,23 @@ Este módulo encapsula as rotas REST da Evolution API em serviços Go:
 - CallService
 - BusinessService
 
-Ele oferece:
+It provides:
 
-- Requests e responses tipados
-- Validações locais antes da chamada HTTP
-- Tratamento padronizado de erro da API
-- Mocks por serviço para testes unitários
-- Testes de integração com ambiente Docker
+- Typed requests and responses
+- Local validations before HTTP calls
+- Standardized API error handling
+- Service-level mocks for unit tests
+- Integration tests with Docker environment
 
-## Base de documentação e referência de contrato
+## Documentation and contract sources
 
-Este módulo é baseado em duas fontes:
+This module is based on two sources:
 
-1. Documentação oficial Evolution API
+1. Official Evolution API documentation
 
 - https://doc.evolution-api.com/v2/
 
-2. Código-fonte oficial (router, dto e schemas)
+2. Official source code (routers, DTOs, and schemas)
 
 - https://github.com/evolution-foundation/evolution-api
 - https://github.com/evolution-foundation/evolution-api/blob/main/src/api/routes/sendMessage.router.ts
@@ -42,26 +42,26 @@ Este módulo é baseado em duas fontes:
 - https://github.com/evolution-foundation/evolution-api/blob/main/src/api/dto/sendMessage.dto.ts
 - https://github.com/evolution-foundation/evolution-api/blob/main/src/api/dto/group.dto.ts
 
-Observação importante:
+Important note:
 
-- Alguns endpoints mudam formato de resposta entre versões e integrações.
-- Exemplo atual relevante: fetchAllGroups retorna JSON array de grupos, não objeto com success.
+- Some endpoints may change response shapes across versions/integrations.
+- Current relevant example: fetchAllGroups returns a JSON array of groups, not an object with success.
 
 ## Instalação
 
-Requisitos:
+Requirements:
 
 - Go 1.26+
 
-Comando:
+Command:
 
 ```bash
 go get github.com/luiz-otavio/evolution-go/api
 ```
 
-## Como usar
+## How to use
 
-Exemplo mínimo:
+Minimal example:
 
 ```go
 package main
@@ -84,7 +84,7 @@ func main() {
     }
 
     resp, err := client.InstanceService().Create(context.Background(), evolution.InstanceCreateRequest{
-        InstanceName: "minha-instancia",
+        InstanceName: "my-instance",
         Qrcode:       true,
         Integration:  "WHATSAPP-BAILEYS",
     })
@@ -92,37 +92,37 @@ func main() {
         log.Fatal(err)
     }
 
-    fmt.Println("Instância criada:", resp.Instance.InstanceName)
+    fmt.Println("Created instance:", resp.Instance.InstanceName)
 }
 ```
 
-## Fluxos comuns
+## Common flows
 
-### 1) Conectar instância e enviar texto
+### 1) Connect an instance and send text
 
 ```go
 ctx := context.Background()
 
 _, _ = client.InstanceService().Create(ctx, evolution.InstanceCreateRequest{
-    InstanceName: "minha-instancia",
+    InstanceName: "my-instance",
     Qrcode:       true,
     Integration:  "WHATSAPP-BAILEYS",
 })
 
-conn, _ := client.InstanceService().Connect(ctx, "minha-instancia")
+conn, _ := client.InstanceService().Connect(ctx, "my-instance")
 fmt.Println("QRCode (base64/data-uri):", conn.Base64)
 
-msg, _ := client.MessageService().SendText(ctx, "minha-instancia", evolution.SendTextRequest{
+msg, _ := client.MessageService().SendText(ctx, "my-instance", evolution.SendTextRequest{
     Number: "5511999999999",
-    Text:   "Olá da evolution-go/api",
+    Text:   "Hello from evolution-go/api",
 })
 fmt.Println("Status:", msg.Status, "MsgID:", msg.Key.ID)
 ```
 
-### 2) Listar grupos e enviar mensagem em grupo pelo JID
+### 2) List groups and send a message to a group by JID
 
 ```go
-groups, _ := client.GroupService().FetchAllGroups(ctx, "minha-instancia", false)
+groups, _ := client.GroupService().FetchAllGroups(ctx, "my-instance", false)
 
 var privateJID string
 for _, g := range groups {
@@ -133,30 +133,30 @@ for _, g := range groups {
 }
 
 if privateJID != "" {
-    _, _ = client.MessageService().SendText(ctx, "minha-instancia", evolution.SendTextRequest{
+    _, _ = client.MessageService().SendText(ctx, "my-instance", evolution.SendTextRequest{
         Number: privateJID,
-        Text:   "Mensagem de teste para o grupo Private",
+        Text:   "Test message to Private group",
     })
 }
 ```
 
-## Estrutura de tipos (resumo)
+## Typed structures (summary)
 
-- MessageResponse usa MessageKey tipado (id, remoteJid, fromMe)
-- ChatService.FindChats retorna []ChatSummary
-- GroupService.FetchAllGroups retorna []GroupSummary
-- InstanceCreateResponse e InstanceResponse usam InstanceInfo tipado
+- MessageResponse uses typed MessageKey (id, remoteJid, fromMe)
+- ChatService.FindChats returns []ChatSummary
+- GroupService.FetchAllGroups returns []GroupSummary
+- InstanceCreateResponse and InstanceResponse use typed InstanceInfo
 
-Isso reduz map genérico e melhora autocomplete e segurança de compilação.
+This reduces generic maps and improves autocomplete and compile-time safety.
 
 ## Erros
 
-Quando a API retorna erro HTTP, o módulo converte para erro estruturado.
+When the API returns an HTTP error, the module converts it to a structured error.
 
-Exemplo:
+Example:
 
 ```go
-_, err := client.InstanceService().Connect(ctx, "instancia-inexistente")
+_, err := client.InstanceService().Connect(ctx, "missing-instance")
 if err != nil {
     fmt.Println(err)
 }
@@ -164,23 +164,23 @@ if err != nil {
 
 ## Testes
 
-### Testes de contrato e unitários
+### Contract and unit tests
 
-Executar no diretório api:
+Run from the api directory:
 
 ```bash
 go test ./... -count=1
 ```
 
-### Testes de integração
+### Integration tests
 
-Dependências:
+Dependencies:
 
-- Docker funcional
-- Evolution API, Postgres e Redis via testcontainers
-- Pareamento de QR quando necessário
+- Working Docker environment
+- Evolution API, Postgres, and Redis via testcontainers
+- QR pairing when required
 
-Variáveis de ambiente úteis (arquivo [api/.env](api/.env)):
+Useful environment variables (file [api/.env](api/.env)):
 
 - EVOLUTION_BASE_URL
 - EVOLUTION_API_KEY
@@ -188,7 +188,7 @@ Variáveis de ambiente úteis (arquivo [api/.env](api/.env)):
 - EVOLUTION_TEST_GROUP_JID
 - EVOLUTION_TEST_GROUP_NAME
 
-Rodar integração com logs detalhados:
+Run integration tests with verbose logs:
 
 ```bash
 go test ./... -run Integration -v -count=1

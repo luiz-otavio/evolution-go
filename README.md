@@ -1,83 +1,83 @@
 # evolution-go
 
-SDK em Go para integração com a Evolution API.
+Go SDK for integrating with Evolution API.
 
-Este repositório organiza os módulos do projeto por responsabilidades (cliente API, testes, scripts auxiliares), com foco em:
+This repository organizes the project modules by responsibility (API client, tests, helper scripts), with a focus on:
 
-- simplicidade de uso para integrações WhatsApp
-- tipagem forte dos contratos HTTP
-- testes de contrato e integração
-- evolução incremental baseada no contrato upstream da Evolution API
+- ease of use for WhatsApp integrations
+- strong typing for HTTP contracts
+- contract and integration tests
+- incremental evolution based on Evolution API upstream contracts
 
-## Visão geral
+## Overview
 
-A ideia do projeto é fornecer uma camada Go para consumir os endpoints da Evolution API com validação local de payload, responses tipadas e mocks para testes.
+The goal of this project is to provide a Go layer for consuming Evolution API endpoints with local payload validation, typed responses, and test mocks.
 
-## Módulos do workspace
+## Workspace modules
 
 ### `api/`
 
-Módulo principal do SDK.
+Main SDK module.
 
-Contém:
+Includes:
 
-- cliente HTTP e configuração (`NewEvolutionClient`)
-- serviços por domínio (instance, message, chat, group, settings, etc.)
-- modelos de request/response
-- mocks para testes unitários
-- suíte de testes (contrato + integração)
+- HTTP client and configuration (`NewEvolutionClient`)
+- domain services (instance, message, chat, group, settings, etc.)
+- request/response models
+- mocks for unit tests
+- test suite (contract + integration)
 
-Documentação completa do módulo: [api/README.md](api/README.md)
+Full module documentation: [api/README.md](api/README.md)
 
 ### `scripts/`
 
-Scripts utilitários de suporte ao desenvolvimento.
+Helper scripts for development workflows.
 
-Atualmente:
+Currently:
 
-- `find-affected-services.sh`: ajuda a identificar serviços impactados por mudanças
+- `find-affected-services.sh`: helps identify services affected by changes
 
-## Estrutura do workspace
+## Workspace structure
 
-- `go.work`: define os módulos Go ativos no workspace
-- `api/go.mod`: dependências e versão Go do módulo `api`
+- `go.work`: defines active Go modules in the workspace
+- `api/go.mod`: dependencies and Go version for the `api` module
 
-## Começando rápido
+## Quick start
 
-Pré-requisitos:
+Prerequisites:
 
 - Go 1.26+
 
-Instalar dependências do módulo API:
+Install dependencies for the API module:
 
 ```bash
 cd api
 go mod tidy
 ```
 
-Executar testes de contrato/unitários:
+Run contract/unit tests:
 
 ```bash
 go test ./... -count=1
 ```
 
-## Testes de integração
+## Integration tests
 
-Os testes de integração do módulo `api` usam Docker (testcontainers) e variáveis de ambiente.
+Integration tests in the `api` module use Docker (testcontainers) and environment variables.
 
-Consulte:
+See:
 
 - [api/README.md](api/README.md)
-- [api/.env.example](api/.env.example)
+- [api/.env](api/.env)
 
-Execução típica:
+Typical run:
 
 ```bash
 cd api
 go test ./... -run Integration -v -count=1
 ```
 
-## Referências
+## References
 
-- Documentação Evolution API: https://doc.evolution-api.com/v2/
-- Repositório oficial Evolution: https://github.com/evolution-foundation
+- Evolution API documentation: https://doc.evolution-api.com/v2/
+- Official Evolution repository: https://github.com/evolution-foundation/evolution-api
