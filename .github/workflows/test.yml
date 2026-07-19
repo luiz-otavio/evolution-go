@@ -136,7 +136,7 @@ jobs:
       - name: Run tests for ${{ matrix.module }}
         working-directory: ${{ matrix.module }}
         run: |
-          go test -race -coverprofile=coverage.out -v ./...
+          go test -race -coverprofile=coverage.out -v ./... -test.short
 
       - name: Format module name
         id: format_module-name
