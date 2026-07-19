@@ -1,253 +1,195 @@
-# evolution
+# evolution-go
 
-Cliente Go para a [Evolution API](https://docs.evolutionfoundation.com.br/evolution-api) — API REST completa para WhatsApp com suporte multi-provedor.
+Cliente Go (Wrapper) para Evolution com foco em segurança de tipos, validação local de payloads e testes de contrato.
+
+## O que é este módulo
+
+Este módulo encapsula as rotas REST da Evolution API em serviços Go:
+
+- InstanceService
+- MessageService
+- ChatService
+- GroupService
+- LabelService
+- SettingsService
+- ProxyService
+- WebhookService
+- TemplateService
+- CallService
+- BusinessService
+
+Ele oferece:
+
+- Requests e responses tipados
+- Validações locais antes da chamada HTTP
+- Tratamento padronizado de erro da API
+- Mocks por serviço para testes unitários
+- Testes de integração com ambiente Docker
+
+## Base de documentação e referência de contrato
+
+Este módulo é baseado em duas fontes:
+
+1. Documentação oficial Evolution API
+
+- https://doc.evolution-api.com/v2/
+
+2. Código-fonte oficial (router, dto e schemas)
+
+- https://github.com/evolution-foundation/evolution-api
+- https://github.com/evolution-foundation/evolution-api/blob/main/src/api/routes/sendMessage.router.ts
+- https://github.com/evolution-foundation/evolution-api/blob/main/src/api/routes/group.router.ts
+- https://github.com/evolution-foundation/evolution-api/blob/main/src/api/dto/sendMessage.dto.ts
+- https://github.com/evolution-foundation/evolution-api/blob/main/src/api/dto/group.dto.ts
+
+Observação importante:
+
+- Alguns endpoints mudam formato de resposta entre versões e integrações.
+- Exemplo atual relevante: fetchAllGroups retorna JSON array de grupos, não objeto com success.
 
 ## Instalação
+
+Requisitos:
+
+- Go 1.26+
+
+Comando:
 
 ```bash
 go get github.com/luiz-otavio/evolution-go/api
 ```
 
-## Início rápido
+## Como usar
+
+Exemplo mínimo:
 
 ```go
-import evolution "github.com/luiz-otavio/evolution-go/api"
+package main
 
-client, err := evolution.NewEvolutionClient(evolution.EvolutionConfig{
-    BaseURL: evolution.BaseURLLocal, // ou BaseURLProduction, ou uma URL customizada
-    APIKey:  "sua-api-key",          // global ou por instância
-})
-if err != nil {
-    log.Fatal(err)
+import (
+    "context"
+    "fmt"
+    "log"
+
+    evolution "github.com/luiz-otavio/evolution-go/api"
+)
+
+func main() {
+    client, err := evolution.NewEvolutionClient(evolution.EvolutionConfig{
+        BaseURL: "http://localhost:8080",
+        APIKey:  "test-api-key",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    resp, err := client.InstanceService().Create(context.Background(), evolution.InstanceCreateRequest{
+        InstanceName: "minha-instancia",
+        Qrcode:       true,
+        Integration:  "WHATSAPP-BAILEYS",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Println("Instância criada:", resp.Instance.InstanceName)
 }
 ```
 
-### Ambientes disponíveis
+## Fluxos comuns
 
-| Constante            | URL                              |
-|----------------------|----------------------------------|
-| `BaseURLLocal`       | `http://localhost:8080`          |
-| `BaseURLProduction`  | `https://api.evolution-api.com`  |
-
-A autenticação é feita via header `apikey` (global ou específico da instância).
-
----
-
-## Serviços
-
-O cliente expõe os seguintes serviços:
-
-```go
-client.InstanceService() // Instâncias (criar, conectar, status, logout...)
-client.MessageService()  // Envio de mensagens (texto, mídia, botões, lista...)
-client.ChatService()     // Chats, contatos, mensagens e perfil
-client.GroupService()    // Grupos e participantes
-client.LabelService()    // Etiquetas
-client.SettingsService() // Configurações da instância
-client.ProxyService()    // Proxy
-client.WebhookService()  // Webhook e WebSocket
-client.TemplateService() // Templates do WhatsApp Business
-client.CallService()     // Chamadas
-client.BusinessService() // Catálogo e coleções (WhatsApp Business)
-```
-
----
-
-## Instância
+### 1) Conectar instância e enviar texto
 
 ```go
 ctx := context.Background()
 
-// Criar instância
-created, err := client.InstanceService().Create(ctx, evolution.InstanceCreateRequest{
+_, _ = client.InstanceService().Create(ctx, evolution.InstanceCreateRequest{
     InstanceName: "minha-instancia",
     Qrcode:       true,
     Integration:  "WHATSAPP-BAILEYS",
 })
 
-// Conectar (retorna QR code / pairing code)
-conn, err := client.InstanceService().Connect(ctx, "minha-instancia")
-fmt.Println("QR base64:", conn.Base64)
+conn, _ := client.InstanceService().Connect(ctx, "minha-instancia")
+fmt.Println("QRCode (base64/data-uri):", conn.Base64)
 
-// Estado da conexão
-state, err := client.InstanceService().ConnectionState(ctx, "minha-instancia")
-fmt.Println("Estado:", state.Instance.State)
-
-// Listar todas
-instances, err := client.InstanceService().FetchInstances(ctx)
-
-// Reiniciar / logout / deletar
-_, err = client.InstanceService().Restart(ctx, "minha-instancia")
-_, err = client.InstanceService().Logout(ctx, "minha-instancia")
-_, err = client.InstanceService().Delete(ctx, "minha-instancia")
-
-// Presença
-_, err = client.InstanceService().SetPresence(ctx, "minha-instancia",
-    evolution.SetPresenceRequest{Presence: evolution.PresenceAvailable})
+msg, _ := client.MessageService().SendText(ctx, "minha-instancia", evolution.SendTextRequest{
+    Number: "5511999999999",
+    Text:   "Olá da evolution-go/api",
+})
+fmt.Println("Status:", msg.Status, "MsgID:", msg.Key.ID)
 ```
 
----
-
-## Mensagens
+### 2) Listar grupos e enviar mensagem em grupo pelo JID
 
 ```go
-// Texto
-_, err := client.MessageService().SendText(ctx, "minha-instancia",
-    evolution.SendTextRequest{
-        Number:      "5511999999999",
-        TextMessage: evolution.TextMessage{Text: "Olá!"},
-    })
+groups, _ := client.GroupService().FetchAllGroups(ctx, "minha-instancia", false)
 
-// Mídia (Media é URL ou base64)
-_, err = client.MessageService().SendMedia(ctx, "minha-instancia",
-    evolution.SendMediaRequest{
-        Number:    "5511999999999",
-        MediaType: evolution.MediaTypeImage,
-        Media:     "https://exemplo.com/imagem.png",
-        Caption:   "Legenda",
-    })
+var privateJID string
+for _, g := range groups {
+    if g.Subject == "Private" && g.ID != "" {
+        privateJID = g.ID
+        break
+    }
+}
 
-// Localização
-_, err = client.MessageService().SendLocation(ctx, "minha-instancia",
-    evolution.SendLocationRequest{
-        Number:    "5511999999999",
-        Latitude:  -23.55,
-        Longitude: -46.63,
-        Name:      "São Paulo",
+if privateJID != "" {
+    _, _ = client.MessageService().SendText(ctx, "minha-instancia", evolution.SendTextRequest{
+        Number: privateJID,
+        Text:   "Mensagem de teste para o grupo Private",
     })
-
-// Enquete
-_, err = client.MessageService().SendPoll(ctx, "minha-instancia",
-    evolution.SendPollRequest{
-        Number:          "5511999999999",
-        Name:            "Qual sua cor favorita?",
-        SelectableCount: 1,
-        Values:          []string{"Azul", "Verde", "Vermelho"},
-    })
+}
 ```
 
-Também disponíveis: `SendButtons`, `SendList`, `SendContact`, `SendReaction`, `SendTemplate`.
+## Estrutura de tipos (resumo)
 
----
+- MessageResponse usa MessageKey tipado (id, remoteJid, fromMe)
+- ChatService.FindChats retorna []ChatSummary
+- GroupService.FetchAllGroups retorna []GroupSummary
+- InstanceCreateResponse e InstanceResponse usam InstanceInfo tipado
 
-## Chat
-
-```go
-// Verificar números no WhatsApp
-res, err := client.ChatService().CheckWhatsAppNumbers(ctx, "minha-instancia",
-    evolution.WhatsAppNumbersRequest{Numbers: []string{"5511999999999"}})
-
-// Buscar contatos
-contacts, err := client.ChatService().FindContacts(ctx, "minha-instancia",
-    evolution.Query{Take: 20})
-
-// Buscar mensagens
-msgs, err := client.ChatService().FindMessages(ctx, "minha-instancia",
-    evolution.Query{Take: 50})
-
-// Arquivar chat / marcar como lido
-_, err = client.ChatService().ArchiveChat(ctx, "minha-instancia",
-    evolution.ArchiveChatRequest{Number: "5511999999999", Archive: true})
-
-// Perfil
-_, err = client.ChatService().UpdateProfileName(ctx, "minha-instancia",
-    evolution.UpdateProfileNameRequest{Name: "Meu Nome"})
-```
-
----
-
-## Grupos
-
-```go
-// Criar grupo
-grp, err := client.GroupService().Create(ctx, "minha-instancia",
-    evolution.CreateGroupRequest{
-        Subject:      "Meu Grupo",
-        Participants: []string{"5511999999999"},
-    })
-
-// Info e participantes
-info, err := client.GroupService().FindGroupInfos(ctx, "minha-instancia", "1203...@g.us")
-parts, err := client.GroupService().Participants(ctx, "minha-instancia", "1203...@g.us")
-
-// Adicionar / remover / promover / rebaixar
-_, err = client.GroupService().UpdateParticipant(ctx, "minha-instancia",
-    evolution.UpdateParticipantRequest{
-        GroupJid:     "1203...@g.us",
-        Action:       evolution.ParticipantActionAdd,
-        Participants: []string{"5511888888888"},
-    })
-```
-
----
-
-## Etiquetas, Configurações, Proxy e Webhook
-
-```go
-labels, err := client.LabelService().FindLabels(ctx, "minha-instancia")
-_, err = client.LabelService().HandleLabel(ctx, "minha-instancia",
-    evolution.HandleLabelRequest{Name: "urgente", Type: evolution.LabelTypeChat, ID: "123", Action: evolution.LabelActionAdd})
-
-settings, err := client.SettingsService().Find(ctx, "minha-instancia")
-_, err = client.SettingsService().Set(ctx, "minha-instancia",
-    evolution.Settings{RejectCall: true, AlwaysOnline: true})
-
-proxy, err := client.ProxyService().Find(ctx, "minha-instancia") // *Proxy (nil se não configurado)
-_, err = client.ProxyService().Set(ctx, "minha-instancia",
-    evolution.Proxy{Enabled: true, ProxyHost: "1.2.3.4", ProxyPort: "8080", ProxyProtocol: evolution.ProxyProtocolHTTP})
-
-webhook, err := client.WebhookService().FindWebhook(ctx, "minha-instancia") // *Webhook
-_, err = client.WebhookService().SetWebhook(ctx, "minha-instancia",
-    evolution.SetWebhookRequest{Enabled: true, URL: "https://meu-servidor.com/webhook", Events: []string{"MESSAGES_UPSERT"}})
-```
-
----
-
-## Templates, Chamadas e Business
-
-```go
-tmpl, err := client.TemplateService().Create(ctx, "minha-instancia",
-    evolution.CreateTemplateRequest{
-        Name:       "boas_vindas",
-        Category:   evolution.TemplateCategoryMarketing,
-        Language:   "pt_BR",
-        Components: []map[string]any{{"type": "BODY", "text": "Olá {{1}}"}},
-    })
-
-_, err = client.CallService().Offer(ctx, "minha-instancia",
-    evolution.OfferCallRequest{Number: "5511999999999", Offer: map[string]any{}})
-
-catalog, err := client.BusinessService().GetCatalog(ctx, "minha-instancia",
-    evolution.BusinessNumberRequest{Number: "5511999999999"})
-```
-
----
+Isso reduz map genérico e melhora autocomplete e segurança de compilação.
 
 ## Erros
 
-Respostas de erro da Evolution API seguem o formato `{ "success": false, "error": { "code", "message" }, "meta": {...} }`.
-Erros são retornados como `*evolution.EvolutionError`:
+Quando a API retorna erro HTTP, o módulo converte para erro estruturado.
+
+Exemplo:
 
 ```go
-_, err := client.InstanceService().Connect(ctx, "inexistente")
-var apiErr *evolution.EvolutionError
-if errors.As(err, &apiErr) {
-    fmt.Println(apiErr.Code, apiErr.Message)
+_, err := client.InstanceService().Connect(ctx, "instancia-inexistente")
+if err != nil {
+    fmt.Println(err)
 }
 ```
 
----
+## Testes
 
-## Mocks
+### Testes de contrato e unitários
 
-Cada serviço possui um mock (`Mock<Serviço>Service`) com campos de função (`...Fn`) para uso em testes:
+Executar no diretório api:
 
-```go
-mock := &evolution.MockInstanceService{
-    ConnectFn: func(ctx context.Context, instanceName string) (evolution.ConnectInstanceResponse, error) {
-        return evolution.ConnectInstanceResponse{Code: "2@fake"}, nil
-    },
-}
+```bash
+go test ./... -count=1
 ```
 
-> Nota: `SendMedia` e `UpdateProfilePicture` são implementados via corpo JSON (URL/base64), enquanto a especificação OpenAPI também documenta upload `multipart/form-data`.
+### Testes de integração
+
+Dependências:
+
+- Docker funcional
+- Evolution API, Postgres e Redis via testcontainers
+- Pareamento de QR quando necessário
+
+Variáveis de ambiente úteis (arquivo [api/.env](api/.env)):
+
+- EVOLUTION_BASE_URL
+- EVOLUTION_API_KEY
+- EVOLUTION_TEST_TARGET_NUMBER
+- EVOLUTION_TEST_GROUP_JID
+- EVOLUTION_TEST_GROUP_NAME
+
+Rodar integração com logs detalhados:
+
+```bash
+go test ./... -run Integration -v -count=1
+```
