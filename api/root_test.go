@@ -301,11 +301,14 @@ func contextWithTimeout(t *testing.T, timeout time.Duration) (context.Context, c
 func waitForInstanceState(ctx context.Context, t *testing.T, client EvolutionClient, instanceName string, expected InstanceState) bool {
 	t.Helper()
 
+	newCtx, timeoutCancel := context.WithTimeout(ctx, time.Minute)
+	defer timeoutCancel()
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
-		stateResp, err := client.InstanceService().ConnectionState(ctx, instanceName)
+		stateResp, err := client.InstanceService().ConnectionState(newCtx, instanceName)
 		if err != nil {
 			t.Fatalf("failed to fetch connection state: %v", err)
 		}
@@ -315,7 +318,7 @@ func waitForInstanceState(ctx context.Context, t *testing.T, client EvolutionCli
 		}
 
 		select {
-		case <-ctx.Done():
+		case <-newCtx.Done():
 			return false
 		case <-ticker.C:
 			t.Logf("Waiting for instance %s to be %s. Current state: %s", instanceName, expected, stateResp.Instance.State)
