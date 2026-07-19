@@ -8,7 +8,7 @@ type MockChatService struct {
 	CheckWhatsAppNumbersFn func(ctx context.Context, instanceName string, req WhatsAppNumbersRequest) (WhatsAppNumbersResponse, error)
 	MarkMessageAsReadFn    func(ctx context.Context, instanceName string, req MarkMessageAsReadRequest) (SuccessResponse, error)
 	ArchiveChatFn          func(ctx context.Context, instanceName string, req ArchiveChatRequest) (SuccessResponse, error)
-	FindChatsFn            func(ctx context.Context, instanceName string, query Query) ([]map[string]any, error)
+	FindChatsFn            func(ctx context.Context, instanceName string, query Query) ([]ChatSummary, error)
 	FindContactsFn         func(ctx context.Context, instanceName string, query Query) ([]Contact, error)
 	FindMessagesFn         func(ctx context.Context, instanceName string, query Query) (FindMessagesResponse, error)
 	UpdateProfileNameFn    func(ctx context.Context, instanceName string, req UpdateProfileNameRequest) (SuccessResponse, error)
@@ -28,7 +28,7 @@ func (m *MockChatService) ArchiveChat(ctx context.Context, instanceName string, 
 	return m.ArchiveChatFn(ctx, instanceName, req)
 }
 
-func (m *MockChatService) FindChats(ctx context.Context, instanceName string, query Query) ([]map[string]any, error) {
+func (m *MockChatService) FindChats(ctx context.Context, instanceName string, query Query) ([]ChatSummary, error) {
 	return m.FindChatsFn(ctx, instanceName, query)
 }
 

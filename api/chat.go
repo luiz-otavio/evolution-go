@@ -2,6 +2,7 @@ package evolution
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	jsoniter "github.com/json-iterator/go"
@@ -74,10 +75,26 @@ type FindMessagesResponse struct {
 }
 
 type FindMessagesPage struct {
-	Total       int              `json:"total"`
-	Pages       int              `json:"pages"`
-	CurrentPage int              `json:"currentPage"`
-	Records     []map[string]any `json:"records"`
+	Total       int                 `json:"total"`
+	Pages       int                 `json:"pages"`
+	CurrentPage int                 `json:"currentPage"`
+	Records     []FindMessageRecord `json:"records"`
+}
+
+type FindMessageRecord struct {
+	ID               string          `json:"id,omitempty"`
+	Key              MessageKey      `json:"key,omitempty"`
+	Message          json.RawMessage `json:"message,omitempty"`
+	PushName         string          `json:"pushName,omitempty"`
+	MessageTimestamp int64           `json:"messageTimestamp,omitempty"`
+}
+
+type ChatSummary struct {
+	ID       string `json:"id,omitempty"`
+	JID      string `json:"jid,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Subject  string `json:"subject,omitempty"`
+	PushName string `json:"pushName,omitempty"`
 }
 
 type UpdateProfileNameRequest struct {
@@ -118,7 +135,7 @@ type ChatService interface {
 	CheckWhatsAppNumbers(ctx context.Context, instanceName string, req WhatsAppNumbersRequest) (WhatsAppNumbersResponse, error)
 	MarkMessageAsRead(ctx context.Context, instanceName string, req MarkMessageAsReadRequest) (SuccessResponse, error)
 	ArchiveChat(ctx context.Context, instanceName string, req ArchiveChatRequest) (SuccessResponse, error)
-	FindChats(ctx context.Context, instanceName string, query Query) ([]map[string]any, error)
+	FindChats(ctx context.Context, instanceName string, query Query) ([]ChatSummary, error)
 	FindContacts(ctx context.Context, instanceName string, query Query) ([]Contact, error)
 	FindMessages(ctx context.Context, instanceName string, query Query) (FindMessagesResponse, error)
 	UpdateProfileName(ctx context.Context, instanceName string, req UpdateProfileNameRequest) (SuccessResponse, error)
@@ -166,7 +183,7 @@ func (s chatService) ArchiveChat(ctx context.Context, instanceName string, req A
 	return postChat[ArchiveChatRequest, SuccessResponse](ctx, s, ChatArchiveChatPath, instanceName, req)
 }
 
-func (s chatService) FindChats(ctx context.Context, instanceName string, query Query) ([]map[string]any, error) {
+func (s chatService) FindChats(ctx context.Context, instanceName string, query Query) ([]ChatSummary, error) {
 	if instanceName == "" {
 		return nil, fmt.Errorf("instanceName is required")
 	}
@@ -177,7 +194,7 @@ func (s chatService) FindChats(ctx context.Context, instanceName string, query Q
 	}
 
 	path := buildInstancePath(ChatFindChatsPath, instanceName)
-	return executePost[[]map[string]any](ctx, s.http, s.apiKey, path, payload)
+	return executePost[[]ChatSummary](ctx, s.http, s.apiKey, path, payload)
 }
 
 func (s chatService) FindContacts(ctx context.Context, instanceName string, query Query) ([]Contact, error) {

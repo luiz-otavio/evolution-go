@@ -10,6 +10,7 @@ import (
 const (
 	GroupCreatePath            = "/group/create"
 	GroupFindGroupInfosPath    = "/group/findGroupInfos"
+	GroupFetchAllGroupsPath    = "/group/fetchAllGroups"
 	GroupParticipantsPath      = "/group/participants"
 	GroupUpdateParticipantPath = "/group/updateParticipant"
 )
@@ -31,14 +32,32 @@ func (r CreateGroupRequest) Validate() error {
 }
 
 type GroupResponse struct {
-	Success bool           `json:"success"`
-	Group   map[string]any `json:"group"`
+	Success bool         `json:"success"`
+	Group   GroupSummary `json:"group"`
 }
 
 type GroupParticipantsResponse struct {
-	Success      bool             `json:"success"`
-	Participants []map[string]any `json:"participants"`
+	Success      bool               `json:"success"`
+	Participants []GroupParticipant `json:"participants"`
 }
+
+type GroupSummary struct {
+	ID       string `json:"id,omitempty"`
+	JID      string `json:"jid,omitempty"`
+	GroupJID string `json:"groupJid,omitempty"`
+	Subject  string `json:"subject,omitempty"`
+	Name     string `json:"name,omitempty"`
+	PushName string `json:"pushName,omitempty"`
+}
+
+type GroupParticipant struct {
+	ID      string `json:"id,omitempty"`
+	LID     string `json:"lid,omitempty"`
+	Admin   string `json:"admin,omitempty"`
+	IsAdmin bool   `json:"isAdmin,omitempty"`
+}
+
+type FetchAllGroupsResponse []GroupSummary
 
 type ParticipantAction string
 
@@ -73,6 +92,7 @@ func (r UpdateParticipantRequest) Validate() error {
 type GroupService interface {
 	Create(ctx context.Context, instanceName string, req CreateGroupRequest) (GroupResponse, error)
 	FindGroupInfos(ctx context.Context, instanceName, groupJid string) (GroupResponse, error)
+	FetchAllGroups(ctx context.Context, instanceName string, getParticipants bool) (FetchAllGroupsResponse, error)
 	Participants(ctx context.Context, instanceName, groupJid string) (GroupParticipantsResponse, error)
 	UpdateParticipant(ctx context.Context, instanceName string, req UpdateParticipantRequest) (SuccessResponse, error)
 }
@@ -113,6 +133,16 @@ func (s groupService) FindGroupInfos(ctx context.Context, instanceName, groupJid
 
 	path := buildInstancePath(GroupFindGroupInfosPath, instanceName)
 	return executeGet[GroupResponse](ctx, s.http, s.apiKey, path, map[string]string{"groupJid": groupJid})
+}
+
+func (s groupService) FetchAllGroups(ctx context.Context, instanceName string, getParticipants bool) (FetchAllGroupsResponse, error) {
+	if instanceName == "" {
+		return FetchAllGroupsResponse{}, fmt.Errorf("instanceName is required")
+	}
+
+	path := buildInstancePath(GroupFetchAllGroupsPath, instanceName)
+	query := map[string]string{"getParticipants": fmt.Sprintf("%t", getParticipants)}
+	return executeGet[FetchAllGroupsResponse](ctx, s.http, s.apiKey, path, query)
 }
 
 func (s groupService) Participants(ctx context.Context, instanceName, groupJid string) (GroupParticipantsResponse, error) {

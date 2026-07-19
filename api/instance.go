@@ -2,6 +2,7 @@ package evolution
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	jsoniter "github.com/json-iterator/go"
@@ -16,6 +17,14 @@ const (
 	InstanceLogoutPath          = "/instance/logout"
 	InstanceDeletePath          = "/instance/delete"
 	InstanceSetPresencePath     = "/instance/setPresence"
+)
+
+type InstanceState string
+
+const (
+	InstanceStateConnecting InstanceState = "connecting"
+	InstanceStateOpen       InstanceState = "open"
+	InstanceStateClose      InstanceState = "close"
 )
 
 // InstanceWebhook is the optional webhook configuration accepted when creating an instance.
@@ -42,11 +51,18 @@ func (r InstanceCreateRequest) Validate() error {
 }
 
 type InstanceCreateResponse struct {
-	Instance map[string]any `json:"instance"`
-	Hash     any            `json:"hash,omitempty"`
-	Webhook  map[string]any `json:"webhook,omitempty"`
-	Settings map[string]any `json:"settings,omitempty"`
-	Qrcode   *QRCode        `json:"qrcode,omitempty"`
+	Instance InstanceInfo    `json:"instance"`
+	Hash     json.RawMessage `json:"hash,omitempty"`
+	Webhook  json.RawMessage `json:"webhook,omitempty"`
+	Settings json.RawMessage `json:"settings,omitempty"`
+	Qrcode   *QRCode         `json:"qrcode,omitempty"`
+}
+
+type InstanceInfo struct {
+	InstanceName string `json:"instanceName,omitempty"`
+	Integration  string `json:"integration,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Owner        string `json:"owner,omitempty"`
 }
 
 type QRCode struct {
@@ -69,12 +85,12 @@ type ConnectionStateResponse struct {
 }
 
 type ConnectionStateInstance struct {
-	InstanceName string `json:"instanceName"`
-	State        string `json:"state"`
+	InstanceName string        `json:"instanceName"`
+	State        InstanceState `json:"state"`
 }
 
 type InstanceResponse struct {
-	Instance map[string]any `json:"instance"`
+	Instance InstanceInfo `json:"instance"`
 }
 
 type RestartInstanceResponse struct {

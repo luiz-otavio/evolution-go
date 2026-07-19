@@ -1,5 +1,7 @@
 package evolution
 
+import "encoding/json"
+
 // SuccessResponse is the common acknowledgement returned by several endpoints.
 type SuccessResponse struct {
 	Success bool   `json:"success"`
@@ -7,10 +9,16 @@ type SuccessResponse struct {
 }
 
 // MessageResponse is returned by all /message/* send endpoints.
+type MessageKey struct {
+	ID        string `json:"id,omitempty"`
+	RemoteJid string `json:"remoteJid,omitempty"`
+	FromMe    bool   `json:"fromMe,omitempty"`
+}
+
 type MessageResponse struct {
-	Key     map[string]any `json:"key,omitempty"`
-	Message map[string]any `json:"message,omitempty"`
-	Status  string         `json:"status,omitempty"`
+	Key     MessageKey      `json:"key,omitempty"`
+	Message json.RawMessage `json:"message,omitempty"`
+	Status  string          `json:"status,omitempty"`
 }
 
 // Query is the generic filter payload used by the /chat/find* endpoints.

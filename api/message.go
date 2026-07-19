@@ -19,17 +19,13 @@ const (
 	MessageSendTemplatePath = "/message/sendTemplate"
 )
 
-// TextMessage is the text payload shared by text and template messages.
-type TextMessage struct {
-	Text string `json:"text"`
-}
-
 type SendTextRequest struct {
 	Number      string         `json:"number"`
-	TextMessage TextMessage    `json:"textMessage"`
+	Text        string         `json:"text,omitempty"`
 	Delay       int            `json:"delay,omitempty"`
 	Quoted      map[string]any `json:"quoted,omitempty"`
 	LinkPreview *bool          `json:"linkPreview,omitempty"`
+	EveryOne    *bool          `json:"everyOne,omitempty"`
 	Mentioned   []string       `json:"mentioned,omitempty"`
 }
 
@@ -37,8 +33,8 @@ func (r SendTextRequest) Validate() error {
 	if r.Number == "" {
 		return fmt.Errorf("number is required")
 	}
-	if r.TextMessage.Text == "" {
-		return fmt.Errorf("textMessage.text is required")
+	if r.Text == "" {
+		return fmt.Errorf("text is required")
 	}
 	return nil
 }
@@ -56,11 +52,14 @@ const (
 type SendMediaRequest struct {
 	Number    string    `json:"number"`
 	MediaType MediaType `json:"mediatype"`
-	Media     string    `json:"media"`
+	Media     string    `json:"media,omitempty"`
 	Caption   string    `json:"caption,omitempty"`
 	FileName  string    `json:"fileName,omitempty"`
 	MimeType  string    `json:"mimetype,omitempty"`
 	Delay     int       `json:"delay,omitempty"`
+	Quoted    any       `json:"quoted,omitempty"`
+	EveryOne  *bool     `json:"everyOne,omitempty"`
+	Mentioned []string  `json:"mentioned,omitempty"`
 }
 
 func (r SendMediaRequest) Validate() error {
@@ -72,22 +71,33 @@ func (r SendMediaRequest) Validate() error {
 	default:
 		return fmt.Errorf("invalid mediatype: %q", r.MediaType)
 	}
-	if r.Media == "" {
-		return fmt.Errorf("media is required")
-	}
 	return nil
 }
 
 type Button struct {
-	ButtonID   string         `json:"buttonId"`
-	ButtonText map[string]any `json:"buttonText"`
+	Type        string `json:"type"`
+	DisplayText string `json:"displayText,omitempty"`
+	ID          string `json:"id,omitempty"`
+	URL         string `json:"url,omitempty"`
+	CopyCode    string `json:"copyCode,omitempty"`
+	PhoneNumber string `json:"phoneNumber,omitempty"`
+	Currency    string `json:"currency,omitempty"`
+	Name        string `json:"name,omitempty"`
+	KeyType     string `json:"keyType,omitempty"`
+	Key         string `json:"key,omitempty"`
 }
 
 type SendButtonsRequest struct {
-	Number     string   `json:"number"`
-	Buttons    []Button `json:"buttons"`
-	Text       string   `json:"text"`
-	FooterText string   `json:"footerText"`
+	Number       string   `json:"number"`
+	ThumbnailURL string   `json:"thumbnailUrl,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	Footer       string   `json:"footer,omitempty"`
+	Buttons      []Button `json:"buttons,omitempty"`
+	Delay        int      `json:"delay,omitempty"`
+	Quoted       any      `json:"quoted,omitempty"`
+	EveryOne     *bool    `json:"everyOne,omitempty"`
+	Mentioned    []string `json:"mentioned,omitempty"`
 }
 
 func (r SendButtonsRequest) Validate() error {
@@ -97,18 +107,36 @@ func (r SendButtonsRequest) Validate() error {
 	if len(r.Buttons) == 0 {
 		return fmt.Errorf("buttons is required")
 	}
-	if r.Text == "" {
-		return fmt.Errorf("text is required")
+	for i, b := range r.Buttons {
+		if b.Type == "" {
+			return fmt.Errorf("buttons[%d].type is required", i)
+		}
 	}
 	return nil
 }
 
+type ListRow struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	RowID       string `json:"rowId"`
+}
+
+type ListSection struct {
+	Title string    `json:"title"`
+	Rows  []ListRow `json:"rows"`
+}
+
 type SendListRequest struct {
-	Number      string           `json:"number"`
-	Title       string           `json:"title"`
-	Description string           `json:"description"`
-	ButtonText  string           `json:"buttonText"`
-	Sections    []map[string]any `json:"sections"`
+	Number      string        `json:"number"`
+	Title       string        `json:"title"`
+	Description string        `json:"description,omitempty"`
+	FooterText  string        `json:"footerText"`
+	ButtonText  string        `json:"buttonText"`
+	Sections    []ListSection `json:"sections"`
+	Delay       int           `json:"delay,omitempty"`
+	Quoted      any           `json:"quoted,omitempty"`
+	EveryOne    *bool         `json:"everyOne,omitempty"`
+	Mentioned   []string      `json:"mentioned,omitempty"`
 }
 
 func (r SendListRequest) Validate() error {
@@ -118,33 +146,56 @@ func (r SendListRequest) Validate() error {
 	if r.Title == "" {
 		return fmt.Errorf("title is required")
 	}
+	if r.FooterText == "" {
+		return fmt.Errorf("footerText is required")
+	}
+	if r.ButtonText == "" {
+		return fmt.Errorf("buttonText is required")
+	}
 	if len(r.Sections) == 0 {
 		return fmt.Errorf("sections is required")
 	}
 	return nil
 }
 
+type ContactMessage struct {
+	FullName     string `json:"fullName"`
+	WUID         string `json:"wuid,omitempty"`
+	PhoneNumber  string `json:"phoneNumber"`
+	Organization string `json:"organization,omitempty"`
+	Email        string `json:"email,omitempty"`
+	URL          string `json:"url,omitempty"`
+}
+
 type SendContactRequest struct {
-	Number   string           `json:"number"`
-	Contacts []map[string]any `json:"contacts"`
+	Number    string           `json:"number"`
+	Contact   []ContactMessage `json:"contact"`
+	Delay     int              `json:"delay,omitempty"`
+	Quoted    any              `json:"quoted,omitempty"`
+	EveryOne  *bool            `json:"everyOne,omitempty"`
+	Mentioned []string         `json:"mentioned,omitempty"`
 }
 
 func (r SendContactRequest) Validate() error {
 	if r.Number == "" {
 		return fmt.Errorf("number is required")
 	}
-	if len(r.Contacts) == 0 {
-		return fmt.Errorf("contacts is required")
+	if len(r.Contact) == 0 {
+		return fmt.Errorf("contact is required")
 	}
 	return nil
 }
 
 type SendLocationRequest struct {
-	Number    string  `json:"number"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Name      string  `json:"name,omitempty"`
-	Address   string  `json:"address,omitempty"`
+	Number    string   `json:"number"`
+	Latitude  float64  `json:"latitude"`
+	Longitude float64  `json:"longitude"`
+	Name      string   `json:"name,omitempty"`
+	Address   string   `json:"address,omitempty"`
+	Delay     int      `json:"delay,omitempty"`
+	Quoted    any      `json:"quoted,omitempty"`
+	EveryOne  *bool    `json:"everyOne,omitempty"`
+	Mentioned []string `json:"mentioned,omitempty"`
 }
 
 func (r SendLocationRequest) Validate() error {
@@ -159,6 +210,10 @@ type SendPollRequest struct {
 	Name            string   `json:"name"`
 	SelectableCount int      `json:"selectableCount"`
 	Values          []string `json:"values"`
+	Delay           int      `json:"delay,omitempty"`
+	Quoted          any      `json:"quoted,omitempty"`
+	EveryOne        *bool    `json:"everyOne,omitempty"`
+	Mentioned       []string `json:"mentioned,omitempty"`
 }
 
 func (r SendPollRequest) Validate() error {
@@ -175,29 +230,37 @@ func (r SendPollRequest) Validate() error {
 }
 
 type SendReactionRequest struct {
-	ReactionKey     map[string]any `json:"reactionKey"`
-	ReactionMessage string         `json:"reactionMessage"`
+	Key      map[string]any `json:"key"`
+	Reaction string         `json:"reaction"`
 }
 
 func (r SendReactionRequest) Validate() error {
-	if len(r.ReactionKey) == 0 {
-		return fmt.Errorf("reactionKey is required")
+	if len(r.Key) == 0 {
+		return fmt.Errorf("key is required")
+	}
+	if r.Reaction == "" {
+		return fmt.Errorf("reaction is required")
 	}
 	return nil
 }
 
 type SendTemplateRequest struct {
-	Number      string      `json:"number"`
-	TextMessage TextMessage `json:"textMessage"`
-	Delay       int         `json:"delay,omitempty"`
+	Number     string `json:"number,omitempty"`
+	Name       string `json:"name"`
+	Language   string `json:"language"`
+	Components any    `json:"components"`
+	WebhookURL string `json:"webhookUrl,omitempty"`
 }
 
 func (r SendTemplateRequest) Validate() error {
-	if r.Number == "" {
-		return fmt.Errorf("number is required")
+	if r.Name == "" {
+		return fmt.Errorf("name is required")
 	}
-	if r.TextMessage.Text == "" {
-		return fmt.Errorf("textMessage.text is required")
+	if r.Language == "" {
+		return fmt.Errorf("language is required")
+	}
+	if r.Components == nil {
+		return fmt.Errorf("components is required")
 	}
 	return nil
 }
